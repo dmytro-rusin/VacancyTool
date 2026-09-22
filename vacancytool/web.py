@@ -6,7 +6,21 @@ from pathlib import Path
 from flask import Flask, jsonify, render_template, request
 
 from . import database as db
+from .scoring import PLATFORM_ORDER
 from .service import Collector
+
+
+STATUS_FILTER_LABELS = {
+    "New": "Нові", "Interested": "Цікавлять", "Applied": "Відгук надіслано",
+    "Viewed": "Переглянуті", "Postponed": "Відкладені", "Rejected": "Відмова",
+    "Deleted": "Видалені", "Irrelevant": "Нерелевантні",
+}
+STATUS_OPTION_LABELS = {
+    "New": "Нова", "Interested": "Цікавить", "Applied": "Відгук надіслано",
+    "Viewed": "Переглянута", "Postponed": "Відкладена", "Rejected": "Відмова",
+    "Deleted": "Видалена", "Irrelevant": "Нерелевантна",
+}
+WORK_FORMAT_LABELS = {"Remote": "Віддалено", "Hybrid": "Гібрид", "Office": "Офіс"}
 
 
 def create_app(root: Path, start_scheduler: bool = False) -> Flask:
@@ -18,7 +32,7 @@ def create_app(root: Path, start_scheduler: bool = False) -> Flask:
     if public_host is not None and (not isinstance(public_host, str) or
                                     not public_host.endswith(".ts.net") or
                                     ":" in public_host or "/" in public_host):
-        raise ValueError("access.json: укажите домен устройства Tailscale (*.ts.net)")
+        raise ValueError("access.json: вкажіть домен пристрою Tailscale (*.ts.net)")
     allowed_hosts = {"127.0.0.1:5090", "localhost:5090", "localhost", "127.0.0.1"}
     allowed_origins = {"http://127.0.0.1:5090", "http://localhost:5090"}
     if public_host:
@@ -31,18 +45,25 @@ def create_app(root: Path, start_scheduler: bool = False) -> Flask:
     @app.before_request
     def local_only():
         if request.host not in allowed_hosts:
-            return jsonify({"error": "Недопустимый адрес сайта"}), 403
+            return jsonify({"error": "Неприпустима адреса сайту"}), 403
         if request.method not in {"GET", "HEAD", "OPTIONS"}:
             origin = request.headers.get("Origin")
             if origin and origin not in allowed_origins:
-                return jsonify({"error": "Недопустимый источник запроса"}), 403
+                return jsonify({"error": "Неприпустиме джерело запиту"}), 403
             if public_host and request.host == public_host and not origin:
-                return jsonify({"error": "Не указан источник запроса"}), 403
+                return jsonify({"error": "Не вказано джерело запиту"}), 403
 
     @app.get("/")
     def index():
         rows = db.list_vacancies(collector.database_path)
+        platform_counts = {platform: sum(platform in row["platforms"] for row in rows)
+                           for platform in PLATFORM_ORDER}
+        platforms = [platform for platform in PLATFORM_ORDER if platform_counts[platform]]
         return render_template("index.html", vacancies=rows, statuses=db.STATUSES,
+                               status_filter_labels=STATUS_FILTER_LABELS,
+                               status_option_labels=STATUS_OPTION_LABELS,
+                               work_format_labels=WORK_FORMAT_LABELS,
+                               platforms=platforms, platform_counts=platform_counts,
                                state=collector.state())
 
     @app.get("/api/state")
@@ -53,16 +74,16 @@ def create_app(root: Path, start_scheduler: bool = False) -> Flask:
     def refresh():
         if collector.manual_refresh():
             return jsonify({"started": True}), 202
-        return jsonify({"error": "Обновление уже выполняется"}), 409
+        return jsonify({"error": "Оновлення вже виконується"}), 409
 
     @app.post("/api/vacancies/<int:vacancy_id>/status")
     def change_status(vacancy_id: int):
         payload = request.get_json(silent=True) or {}
         status = payload.get("status")
         if status not in db.STATUSES:
-            return jsonify({"error": "Некорректный статус"}), 400
+            return jsonify({"error": "Некоректний статус"}), 400
         if not db.set_status(collector.database_path, vacancy_id, status):
-            return jsonify({"error": "Вакансия не найдена"}), 404
+            return jsonify({"error": "Вакансію не знайдено"}), 404
         return jsonify({"status": status, "counts": db.counts(collector.database_path)})
 
     @app.post("/api/schedule")

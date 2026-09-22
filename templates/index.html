@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="uk">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -11,76 +11,80 @@
   <main class="shell">
     <header class="top">
       <div>
-        <div class="eyebrow">Локальный поиск работы</div>
+        <div class="eyebrow">Локальний пошук роботи</div>
         <h1>VacancyTool</h1>
-        <p class="subtitle">Вакансии по вашим приоритетам, без повторов и лишнего шума.</p>
+        <p class="subtitle">Вакансії за вашими пріоритетами, без повторів і зайвого шуму.</p>
       </div>
       <div class="top-actions">
-        <button id="refresh" class="primary" type="button">Обновить сейчас</button>
-        <button id="schedule-toggle" class="secondary" type="button" aria-expanded="false">Расписание</button>
+        <button id="refresh" class="primary" type="button">Оновити зараз</button>
+        <button id="schedule-toggle" class="secondary" type="button" aria-expanded="false">Розклад</button>
       </div>
     </header>
 
     <section class="update-line" aria-live="polite">
       <span id="run-indicator" class="dot"></span>
-      <span id="last-update">Последнее обновление: —</span>
+      <span id="last-update">Останнє оновлення: —</span>
       <span class="separator">·</span>
-      <span id="next-update">Следующее: —</span>
+      <span id="next-update">Наступне: —</span>
       <span id="run-note"></span>
       <span id="mail-note"></span>
     </section>
 
     <section id="schedule-panel" class="schedule-panel" hidden>
-      <div class="panel-heading"><h2>Расписание опроса</h2><p>Часовой пояс: Europe/Kyiv. Изменение расписания не запускает поиск.</p></div>
+      <div class="panel-heading"><h2>Розклад опитування</h2><p>Часовий пояс: Europe/Kyiv. Зміна розкладу не запускає пошук.</p></div>
       <div class="schedule-grid">
         {% for window in state.schedule %}
         <div class="schedule-row">
-          <label>С <input class="start" type="time" value="{{ window.start }}"></label>
+          <label>З <input class="start" type="time" value="{{ window.start }}"></label>
           <label>До <input class="end" type="time" value="{{ window.end }}"></label>
-          <label>Каждые <input class="minutes" type="number" min="1" max="1440" value="{{ window.minutes }}"> мин</label>
+          <label>Кожні <input class="minutes" type="number" min="1" max="1440" value="{{ window.minutes }}"> хв</label>
         </div>
         {% endfor %}
       </div>
-      <div class="panel-actions"><button id="save-schedule" class="secondary" type="button">Сохранить расписание</button><span id="schedule-message" role="status"></span></div>
+      <div class="panel-actions"><button id="save-schedule" class="secondary" type="button">Зберегти розклад</button><span id="schedule-message" role="status"></span></div>
     </section>
 
-    <section class="filter-section" aria-label="Фильтры вакансий">
+    <section class="filter-section" aria-label="Фільтри вакансій">
       <div class="filter-row"><span class="filter-label">Статус</span><div id="status-filters" class="chips">
-        <button type="button" class="chip active" data-all="status">All <span id="count-all">({{ vacancies|length }})</span></button>
-        {% for status in statuses %}<button type="button" class="chip" data-status="{{ status }}">{{ status }} <span class="count" data-count="{{ status }}">({{ state.counts[status] }})</span></button>{% endfor %}
+        <button type="button" class="chip active" data-all="status">Усі <span id="count-all">({{ vacancies|length }})</span></button>
+        {% for status in statuses %}<button type="button" class="chip" data-status="{{ status }}">{{ status_filter_labels[status] }} <span class="count" data-count="{{ status }}">({{ state.counts[status] }})</span></button>{% endfor %}
       </div></div>
-      <div class="filter-row"><span class="filter-label">Скоринг</span><div id="score-filters" class="chips">
-        <button type="button" class="chip active" data-all="score">All</button>
+      <div class="filter-row"><span class="filter-label">Рейтинг</span><div id="score-filters" class="chips">
+        <button type="button" class="chip active" data-all="score">Усі</button>
         <button type="button" class="chip" data-score="75">75–100</button>
         <button type="button" class="chip" data-score="50">50–75</button>
         <button type="button" class="chip" data-score="25">25–50</button>
         <button type="button" class="chip" data-score="0">0–25</button>
       </div></div>
+      <div class="filter-row"><span class="filter-label">Платформа</span><div id="platform-filters" class="chips">
+        <button type="button" class="chip active" data-all="platform">Усі</button>
+        {% for platform in platforms %}<button type="button" class="chip" data-platform="{{ platform }}">{{ platform }} <span>({{ platform_counts[platform] }})</span></button>{% endfor %}
+      </div></div>
     </section>
 
-    <div class="list-heading"><h2>Вакансии</h2><span id="visible-count">{{ vacancies|length }} показано</span></div>
-    <section id="vacancies" class="vacancies" aria-label="Список вакансий">
+    <div class="list-heading"><h2>Вакансії</h2><span id="visible-count">Показано: {{ vacancies|length }}</span></div>
+    <section id="vacancies" class="vacancies" aria-label="Список вакансій">
       {% for vacancy in vacancies %}
-      <article class="vacancy" data-id="{{ vacancy.id }}" data-status="{{ vacancy.status }}" data-score="{{ vacancy.score }}" data-published="{{ vacancy.published_at or '' }}">
+      <article class="vacancy" data-id="{{ vacancy.id }}" data-status="{{ vacancy.status }}" data-score="{{ vacancy.score }}" data-platforms="{{ vacancy.platforms|join('|') }}" data-published="{{ vacancy.published_at or '' }}">
         <div class="score {% if vacancy.score >= 75 %}strong{% elif vacancy.score >= 50 %}good{% elif vacancy.score >= 25 %}medium{% else %}low{% endif %}" title="{{ vacancy.reason }}">{{ vacancy.score }}</div>
         <div class="vacancy-main">
           <div class="vacancy-head"><a class="vacancy-title" href="{{ vacancy.original_url }}" target="_blank" rel="noopener noreferrer">{{ vacancy.title }}</a><span class="source">{{ vacancy.sources|replace('djinni', 'Djinni')|replace('dou', 'DOU')|replace(',', ' · ') }}</span></div>
           <div class="meta">
             {% if vacancy.company %}<span>{{ vacancy.company }}</span>{% endif %}
             <span class="role-meta">{{ vacancy.level }} · {{ vacancy.stack }}</span>
-            {% if vacancy.work_format %}<span>{{ vacancy.work_format }}</span>{% endif %}
+            {% if vacancy.work_format %}<span>{{ work_format_labels.get(vacancy.work_format, vacancy.work_format) }}</span>{% endif %}
             {% if vacancy.location %}<span>{{ vacancy.location }}</span>{% endif %}
             <span class="published" data-date="{{ vacancy.published_at or vacancy.first_seen_at }}"></span>
           </div>
           <p class="excerpt">{{ vacancy.description_text[:330] }}{% if vacancy.description_text|length > 330 %}…{% endif %}</p>
         </div>
-        <label class="status-control"><span>Статус</span><select aria-label="Статус вакансии {{ vacancy.title }}">
-          {% for status in statuses %}<option value="{{ status }}" {% if vacancy.status == status %}selected{% endif %}>{{ status }}</option>{% endfor %}
+        <label class="status-control"><span>Статус</span><select aria-label="Статус вакансії {{ vacancy.title }}">
+          {% for status in statuses %}<option value="{{ status }}" {% if vacancy.status == status %}selected{% endif %}>{{ status_option_labels[status] }}</option>{% endfor %}
         </select></label>
       </article>
       {% endfor %}
     </section>
-    <div id="empty" class="empty" hidden>Нет вакансий для выбранных фильтров.</div>
+    <div id="empty" class="empty" hidden>Немає вакансій для вибраних фільтрів.</div>
   </main>
 </body>
 </html>

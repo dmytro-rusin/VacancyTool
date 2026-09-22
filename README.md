@@ -12,11 +12,11 @@ The application is designed to run continuously on a personal computer. It polls
 - Deterministic scoring from `0` to `100`, with an explanation saved for every result
 - Automatic exclusion of QA, Project Manager, UI/UX Designer, and Customer Support roles
 - Persistent workflow statuses: `New`, `Interested`, `Applied`, `Viewed`, `Postponed`, `Rejected`, `Deleted`, and `Irrelevant`
-- Combined status and score filters with immediate status updates
+- Combined status, score, and platform filters with immediate status updates
 - Dynamic polling intervals based on the time of day
 - Email digests for new vacancies scoring above `25`
 - Optional private phone access through Tailscale Serve
-- Responsive interface for desktop and mobile browsers
+- Ukrainian responsive interface for desktop and mobile browsers
 
 ## Architecture
 

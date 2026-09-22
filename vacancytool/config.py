@@ -38,14 +38,14 @@ def load_settings(root: Path) -> dict:
 
 def validate_schedule(windows: list[dict]) -> None:
     if not windows:
-        raise ValueError("Нужно хотя бы одно временное окно")
+        raise ValueError("Потрібне хоча б одне часове вікно")
     intervals = []
     for window in windows:
         start = time.fromisoformat(window["start"])
         end = time.fromisoformat(window["end"])
         minutes = int(window["minutes"])
         if start == end or not 1 <= minutes <= 1440:
-            raise ValueError("Некорректное окно или интервал")
+            raise ValueError("Некоректне часове вікно або інтервал")
         a = start.hour * 60 + start.minute
         b = end.hour * 60 + end.minute
         if b <= a:
@@ -57,7 +57,7 @@ def validate_schedule(windows: list[dict]) -> None:
         for minute in range(a, b):
             coverage[minute % 1440] += 1
     if any(count != 1 for count in coverage):
-        raise ValueError("Окна должны покрывать сутки без пропусков и пересечений")
+        raise ValueError("Часові вікна мають покривати добу без пропусків і перетинів")
 
 
 def next_due(after: datetime, windows: list[dict]) -> datetime:

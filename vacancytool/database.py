@@ -7,7 +7,7 @@ from contextlib import contextmanager, closing
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .scoring import assess
+from .scoring import assess, detect_platforms
 from .sources import FeedItem, dou_company, html_to_text, without_salary, without_salary_title
 
 STATUSES = ("New", "Applied", "Interested", "Viewed", "Postponed", "Rejected", "Irrelevant", "Deleted")
@@ -246,7 +246,10 @@ def list_vacancies(path: Path) -> list[dict]:
                 WHEN 'Deleted' THEN 6 WHEN 'Irrelevant' THEN 7 ELSE 8 END,
               v.score DESC,
               v.published_at IS NULL, v.published_at DESC, v.first_seen_at DESC, v.id DESC""").fetchall()
-        return [dict(row) for row in rows]
+        result = [dict(row) for row in rows]
+        for row in result:
+            row["platforms"] = detect_platforms(row["title"], row["description_text"], row["stack"])
+        return result
 
 
 def counts(path: Path) -> dict[str, int]:

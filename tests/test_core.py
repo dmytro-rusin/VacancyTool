@@ -9,7 +9,7 @@ from unittest.mock import patch
 from vacancytool.config import DEFAULT_SETTINGS, TIMEZONE, next_due
 from vacancytool.database import connect, counts, excluded_role, initialize, list_vacancies, pending_notifications, set_status, upsert_item
 from vacancytool.notifications import build_digest, load_mail_settings, send_pending
-from vacancytool.scoring import assess, onsite_only
+from vacancytool.scoring import assess, detect_platforms, onsite_only
 from vacancytool.sources import FeedItem, canonicalize, extract_detail, parse_feed, without_salary_title
 from vacancytool.web import create_app
 
@@ -120,6 +120,13 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(assess("Senior SDK Developer", "Android/Kotlin + iOS/Swift SDK").stack, "iOS + Android")
         self.assertEqual(assess("Software Engineer", "Build a frontend with TypeScript and React.js").stack, "JavaScript")
 
+    def test_platform_detection_uses_primary_stack_and_title(self):
+        self.assertEqual(detect_platforms("Senior iOS Developer", "KMP is a plus", "iOS"), ("iOS",))
+        self.assertEqual(detect_platforms("Senior Mobile Engineer", "iOS and Android", "iOS + Android"),
+                         ("iOS", "Android"))
+        self.assertEqual(detect_platforms("Android Engineer", "Kotlin", "—"), ("Android",))
+        self.assertEqual(detect_platforms("Backend Engineer", "Python and Django", "Python"), ("Python",))
+
     def test_onsite_only_penalty(self):
         self.assertEqual(assess("Senior iOS Developer", "Swift UIKit", "Hybrid").score, 95)
         self.assertEqual(assess("Senior iOS Developer", "Swift UIKit", "Office").score, 95)
@@ -173,7 +180,14 @@ class CoreTests(unittest.TestCase):
             self.assertNotIn("$", rows[0]["title"] + rows[0]["description_text"])
             app = create_app(root)
             client = app.test_client()
-            self.assertEqual(client.get("/").status_code, 200)
+            page = client.get("/")
+            self.assertEqual(page.status_code, 200)
+            html = page.get_data(as_text=True)
+            self.assertIn('lang="uk"', html)
+            self.assertIn('data-platform="iOS"', html)
+            self.assertIn('data-platforms="iOS"', html)
+            self.assertIn('Платформа', html)
+            self.assertIn('Оновити зараз', html)
             self.assertEqual(client.post("/api/refresh", headers={"Origin": "https://example.org"}).status_code, 403)
             response = client.post(f'/api/vacancies/{rows[0]["id"]}/status', json={"status": "Interested"})
             self.assertEqual(response.status_code, 200)
