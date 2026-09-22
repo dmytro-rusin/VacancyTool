@@ -1,0 +1,13 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.sqlite3
+*.sqlite3-*
+server.log
+server-error.log
+settings.json
+mail.json
+access.json
+launchd/com.drusin.vacancytool.plist
+.DS_Store

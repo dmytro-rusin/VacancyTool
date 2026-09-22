@@ -1,0 +1,9 @@
+{
+  "host": "smtp.example.com",
+  "port": 465,
+  "security": "ssl",
+  "username": "you@example.com",
+  "password": "app-password-or-smtp-token",
+  "from": "you@example.com",
+  "to": "you@example.com"
+}
