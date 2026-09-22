@@ -185,6 +185,8 @@ class CoreTests(unittest.TestCase):
             html = page.get_data(as_text=True)
             self.assertIn('lang="uk"', html)
             self.assertIn('data-platform="iOS"', html)
+            self.assertIn('data-platform="Go"', html)
+            self.assertIn('Go <span>(0)</span>', html)
             self.assertIn('data-platforms="iOS"', html)
             self.assertIn('Платформа', html)
             self.assertIn('Оновити зараз', html)

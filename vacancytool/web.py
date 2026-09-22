@@ -58,7 +58,7 @@ def create_app(root: Path, start_scheduler: bool = False) -> Flask:
         rows = db.list_vacancies(collector.database_path)
         platform_counts = {platform: sum(platform in row["platforms"] for row in rows)
                            for platform in PLATFORM_ORDER}
-        platforms = [platform for platform in PLATFORM_ORDER if platform_counts[platform]]
+        platforms = list(PLATFORM_ORDER)
         return render_template("index.html", vacancies=rows, statuses=db.STATUSES,
                                status_filter_labels=STATUS_FILTER_LABELS,
                                status_option_labels=STATUS_OPTION_LABELS,
