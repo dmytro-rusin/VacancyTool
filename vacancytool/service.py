@@ -25,6 +25,7 @@ class Collector:
         db.initialize(self.database_path)
         self.scheduler = BackgroundScheduler(timezone=TIMEZONE, daemon=True)
         self.run_lock = threading.Lock()
+        self.run_state_lock = threading.Lock()
         self.schedule_lock = threading.Lock()
         self.next_run: datetime | None = None
         self.running = False
@@ -46,15 +47,26 @@ class Collector:
                                    replace_existing=True, max_instances=1, misfire_grace_time=None)
 
     def _scheduled_run(self):
-        # Schedule against the clock, before the network work starts.
+        # Keep the timer callback short. A slow collection must not make
+        # APScheduler skip the next one-shot job and break the schedule chain.
         self._schedule_next()
-        self._run("scheduled")
+        self._start_run("scheduled")
 
     def manual_refresh(self) -> bool:
-        if self.run_lock.locked() or self.running:
-            return False
-        self.running = True
-        threading.Thread(target=self._run, args=("manual",), daemon=True, name="manual-refresh").start()
+        return self._start_run("manual")
+
+    def _start_run(self, trigger_type: str) -> bool:
+        with self.run_state_lock:
+            if self.running:
+                return False
+            self.running = True
+        try:
+            threading.Thread(target=self._run, args=(trigger_type,), daemon=True,
+                             name=f"{trigger_type}-refresh").start()
+        except RuntimeError:
+            with self.run_state_lock:
+                self.running = False
+            raise
         return True
 
     def update_schedule(self, windows: list[dict]):
@@ -82,7 +94,6 @@ class Collector:
     def _run(self, trigger_type: str):
         if not self.run_lock.acquire(blocking=False):
             return
-        self.running = True
         run_id = db.begin_run(self.database_path, trigger_type)
         found = new = 0
         errors: list[str] = []
@@ -144,5 +155,6 @@ class Collector:
         finally:
             session.close()
             db.end_run(self.database_path, run_id, found, new, errors)
-            self.running = False
+            with self.run_state_lock:
+                self.running = False
             self.run_lock.release()

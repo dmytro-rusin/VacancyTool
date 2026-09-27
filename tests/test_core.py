@@ -10,11 +10,22 @@ from vacancytool.config import DEFAULT_SETTINGS, TIMEZONE, next_due
 from vacancytool.database import connect, counts, excluded_role, initialize, list_vacancies, pending_notifications, set_status, upsert_item
 from vacancytool.notifications import build_digest, load_mail_settings, send_pending
 from vacancytool.scoring import assess, detect_platforms, onsite_only
+from vacancytool.service import Collector
 from vacancytool.sources import FeedItem, canonicalize, extract_detail, parse_feed, without_salary_title
 from vacancytool.web import create_app
 
 
 class CoreTests(unittest.TestCase):
+    def test_scheduler_rearms_before_starting_background_collection(self):
+        collector = object.__new__(Collector)
+        calls = []
+        collector._schedule_next = lambda: calls.append("schedule")
+        collector._start_run = lambda trigger: calls.append(f"start:{trigger}")
+
+        collector._scheduled_run()
+
+        self.assertEqual(calls, ["schedule", "start:scheduled"])
+
     def test_mail_password_can_come_from_keychain(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
