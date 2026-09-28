@@ -1,0 +1,8 @@
+{
+  "enabled": false,
+  "model": "qwen3.5:9b",
+  "base_url": "http://127.0.0.1:11434",
+  "max_per_run": 8,
+  "context_tokens": 8192,
+  "profile": "Describe relevant experience, strongest technologies, target roles, and important constraints without including your name, email, phone number, or other identifiers."
+}

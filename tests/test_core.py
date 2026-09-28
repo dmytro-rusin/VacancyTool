@@ -6,8 +6,10 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
+from vacancytool.ai_scoring import OllamaAnalyzer, analysis_fingerprint, load_ai_settings
 from vacancytool.config import DEFAULT_SETTINGS, TIMEZONE, next_due
-from vacancytool.database import connect, counts, excluded_role, initialize, list_vacancies, pending_notifications, set_status, upsert_item
+from vacancytool.database import (ai_candidates, connect, counts, excluded_role, initialize, list_vacancies,
+                                  pending_notifications, save_ai_assessment, set_status, upsert_item)
 from vacancytool.notifications import build_digest, load_mail_settings, send_pending
 from vacancytool.scoring import assess, detect_platforms, onsite_only
 from vacancytool.service import Collector
@@ -16,6 +18,118 @@ from vacancytool.web import create_app
 
 
 class CoreTests(unittest.TestCase):
+    def test_ai_scoring_is_structured_deterministic_and_clamped(self):
+        vacancy = {
+            "id": 1, "title": "Junior Python Backend Engineer", "company": "Acme",
+            "description_text": "Python and Django", "work_format": "Remote", "location": "Europe",
+            "rule_score": 36,
+        }
+        config = {"base_url": "http://127.0.0.1:11434", "context_tokens": 8192,
+                  "model": "qwen3.5:9b", "profile": "Senior iOS engineer"}
+
+        class Response:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"message": {"content":
+                        '{"adjustment":99,"summary_uk":"Сильна база, але новий стек."}'}}
+
+        class Session:
+            def post(self, *args, **kwargs):
+                self.payload = kwargs["json"]
+                return Response()
+
+        session = Session()
+        result = OllamaAnalyzer(config, session).assess(vacancy)
+        self.assertEqual(result.score, 46)
+        self.assertEqual(result.reason, "Сильна база, але новий стек.")
+        self.assertFalse(session.payload["think"])
+        self.assertEqual(session.payload["format"]["type"], "object")
+        self.assertEqual(session.payload["options"]["temperature"], 0)
+        self.assertNotEqual(analysis_fingerprint(vacancy, config),
+                            analysis_fingerprint(vacancy, {**config, "profile": "Different profile"}))
+
+        class NegativeResponse(Response):
+            def json(self):
+                return {"message": {"content":
+                        '{"adjustment":-20,"summary_uk":"Є обов’язкова прогалина."}'}}
+
+        class NegativeSession(Session):
+            def post(self, *args, **kwargs):
+                self.payload = kwargs["json"]
+                return NegativeResponse()
+
+        high_priority = {**vacancy, "title": "Junior iOS Developer", "rule_score": 88}
+        self.assertEqual(OllamaAnalyzer(config, NegativeSession()).assess(high_priority).score, 83)
+
+    def test_ai_score_survives_restart_and_is_invalidated_by_vacancy_change(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            database = root / "vacancies.sqlite3"
+            initialize(database)
+            item = FeedItem("djinni", "ai", "https://djinni.co/jobs/ai-test/",
+                            "https://djinni.co/jobs/ai-test/", "Senior iOS Developer", "Acme",
+                            "<p>Swift and UIKit</p>", None)
+            self.assertTrue(upsert_item(database, item, "ios", None, None, False))
+            candidate = ai_candidates(database)[0]
+            save_ai_assessment(database, candidate["id"], 93, "Добра відповідність.",
+                               "qwen3.5:9b", "hash")
+            initialize(database)
+            self.assertEqual(list_vacancies(database)[0]["score"], 93)
+            self.assertEqual(list_vacancies(database)[0]["ai_score"], 93)
+
+            upsert_item(database, item, "ios", "<p>Swift, UIKit and mandatory Metal expertise</p>",
+                        None, True)
+            updated = list_vacancies(database)[0]
+            self.assertIsNone(updated["ai_score"])
+            self.assertEqual(updated["score"], updated["rule_score"])
+
+    def test_ai_can_promote_a_new_vacancy_into_the_mail_digest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "vacancies.sqlite3"
+            initialize(database)
+            item = FeedItem("djinni", "java", "https://djinni.co/jobs/java-test/",
+                            "https://djinni.co/jobs/java-test/", "Junior Java Backend Engineer",
+                            "Acme", "<p>Java and Spring</p>", None)
+            self.assertTrue(upsert_item(database, item, "backend", None, None, False))
+            candidate = ai_candidates(database)[0]
+            self.assertEqual(candidate["rule_score"], 18)
+            self.assertFalse(pending_notifications(database))
+            save_ai_assessment(database, candidate["id"], 28, "Реалістичний перехід.",
+                               "qwen3.5:9b", "hash")
+            self.assertEqual([row["score"] for row in pending_notifications(database)], [28])
+
+    def test_ai_mail_digest_waits_for_analysis(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            database = root / "vacancies.sqlite3"
+            initialize(database)
+            item = FeedItem("djinni", "mail-ai", "https://djinni.co/jobs/mail-ai/",
+                            "https://djinni.co/jobs/mail-ai/", "Senior iOS Developer",
+                            "Acme", "<p>Swift and UIKit</p>", None)
+            self.assertTrue(upsert_item(database, item, "ios", None, None, False))
+            self.assertEqual(len(pending_notifications(database)), 1)
+            self.assertEqual(send_pending(root, database, require_ai=True), 0)
+            candidate = ai_candidates(database)[0]
+            save_ai_assessment(database, candidate["id"], 96, "Сильна відповідність.",
+                               "qwen3.5:9b", "hash")
+            self.assertEqual(len(pending_notifications(database, require_ai=True)), 1)
+
+    def test_ai_is_disabled_without_local_configuration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertIsNone(load_ai_settings(Path(directory)))
+
+    def test_ai_configuration_rejects_remote_servers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "ai.json").write_text(json.dumps({
+                "enabled": True, "model": "qwen3.5:9b", "profile": "iOS engineer",
+                "base_url": "https://example.com",
+            }))
+            with self.assertRaisesRegex(ValueError, "локальну адресу"):
+                load_ai_settings(root)
+
     def test_scheduler_rearms_before_starting_background_collection(self):
         collector = object.__new__(Collector)
         calls = []

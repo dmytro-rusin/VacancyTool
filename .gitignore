@@ -9,5 +9,6 @@ server-error.log
 settings.json
 mail.json
 access.json
+ai.json
 launchd/com.drusin.vacancytool.plist
 .DS_Store

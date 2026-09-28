@@ -74,8 +74,8 @@ def send_digest(config: dict, vacancies: list[dict]) -> None:
             smtp.send_message(message)
 
 
-def send_pending(root: Path, database_path: Path) -> int:
-    vacancies = db.pending_notifications(database_path)
+def send_pending(root: Path, database_path: Path, require_ai: bool = False) -> int:
+    vacancies = db.pending_notifications(database_path, require_ai=require_ai)
     if not vacancies:
         return 0
     config = load_mail_settings(root)

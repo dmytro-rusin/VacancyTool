@@ -109,12 +109,19 @@ def initialize(path: Path) -> None:
             ("vacancies", "excluded", "INTEGER NOT NULL DEFAULT 0"),
             ("vacancies", "work_format", "TEXT"),
             ("vacancies", "location", "TEXT"),
+            ("vacancies", "rule_score", "INTEGER"),
+            ("vacancies", "ai_score", "INTEGER"),
+            ("vacancies", "ai_reason", "TEXT"),
+            ("vacancies", "ai_model", "TEXT"),
+            ("vacancies", "ai_analyzed_at", "TEXT"),
+            ("vacancies", "ai_content_hash", "TEXT"),
             ("postings", "metadata_checked_at", "TEXT"),
         ):
             if column not in {row["name"] for row in db.execute(f"PRAGMA table_info({table})")}:
                 db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
-        for row in db.execute("""SELECT id,title,company,description_text,score,level,stack,role,reason,
-                              work_format FROM vacancies""").fetchall():
+        db.execute("UPDATE vacancies SET rule_score=score WHERE rule_score IS NULL")
+        for row in db.execute("""SELECT id,title,company,description_text,score,rule_score,ai_score,
+                              level,stack,role,reason,work_format FROM vacancies""").fetchall():
             title = without_salary_title(row["title"])
             text = without_salary(row["description_text"])
             company = row["company"]
@@ -124,13 +131,22 @@ def initialize(path: Path) -> None:
                 company = company.split(",", 1)[0].strip()
             result = assess(title, text, row["work_format"])
             db.execute("UPDATE vacancies SET excluded=? WHERE id=?", (int(excluded_role(title)), row["id"]))
-            if (title, company, text, result.score, result.level, result.stack, result.role, result.reason) != (
-                row["title"], row["company"], row["description_text"], row["score"], row["level"],
-                row["stack"], row["role"], row["reason"]):
-                db.execute("""UPDATE vacancies SET title=?,company=?,description_text=?,score=?,
-                           level=?,stack=?,role=?,reason=?,updated_at=? WHERE id=?""",
-                           (title, company, text, result.score, result.level, result.stack, result.role,
-                            result.reason, utc_now(), row["id"]))
+            ai_invalid = (title != row["title"] or text != row["description_text"] or
+                          result.score != row["rule_score"])
+            final_score = result.score if ai_invalid or row["ai_score"] is None else row["ai_score"]
+            if (title, company, text, final_score, result.score, result.level, result.stack,
+                    result.role, result.reason) != (
+                row["title"], row["company"], row["description_text"], row["score"], row["rule_score"],
+                row["level"], row["stack"], row["role"], row["reason"]):
+                db.execute("""UPDATE vacancies SET title=?,company=?,description_text=?,score=?,rule_score=?,
+                           level=?,stack=?,role=?,reason=?,updated_at=?,
+                           ai_score=CASE WHEN ? THEN NULL ELSE ai_score END,
+                           ai_reason=CASE WHEN ? THEN NULL ELSE ai_reason END,
+                           ai_model=CASE WHEN ? THEN NULL ELSE ai_model END,
+                           ai_analyzed_at=CASE WHEN ? THEN NULL ELSE ai_analyzed_at END,
+                           ai_content_hash=CASE WHEN ? THEN NULL ELSE ai_content_hash END WHERE id=?""",
+                           (title, company, text, final_score, result.score, result.level, result.stack,
+                            result.role, result.reason, utc_now(), *(int(ai_invalid),) * 5, row["id"]))
 
 
 def get_posting(path: Path, source: str, source_key: str):
@@ -185,13 +201,17 @@ def upsert_item(path: Path, item: FeedItem, search_key: str, detail_html: str | 
             if not detail_html and old["description_text"]:
                 description_text = old["description_text"]
             result = assess(title, description_text, effective_work_format)
-            if (description_text != old["description_text"] or title != old["title"] or
-                    result.score != old["score"] or result.reason != old["reason"]):
+            ai_invalid = (description_text != old["description_text"] or title != old["title"] or
+                          effective_work_format != old["work_format"] or
+                          (location is not None and location != old["location"]) or
+                          result.score != old["rule_score"])
+            if ai_invalid or result.reason != old["reason"]:
                 db.execute("""UPDATE vacancies SET title=?, company=COALESCE(?,company),
-                           description_text=?, score=?, level=?, stack=?, role=?,
-                           reason=?, updated_at=? WHERE id=?""",
-                           (title, company, description_text, result.score, result.level,
-                            result.stack, result.role, result.reason, now, vacancy_id))
+                           description_text=?, score=?, rule_score=?, level=?, stack=?, role=?,
+                           reason=?, updated_at=?, ai_score=NULL, ai_reason=NULL, ai_model=NULL,
+                           ai_analyzed_at=NULL, ai_content_hash=NULL WHERE id=?""",
+                           (title, company, description_text, result.score, result.score,
+                            result.level, result.stack, result.role, result.reason, now, vacancy_id))
             elif company and company != old["company"]:
                 db.execute("UPDATE vacancies SET company=? WHERE id=?", (company, vacancy_id))
             inserted = False
@@ -204,25 +224,36 @@ def upsert_item(path: Path, item: FeedItem, search_key: str, detail_html: str | 
             if inserted:
                 result = assess(title, description_text, work_format)
                 cursor = db.execute("""INSERT INTO vacancies
-                    (title, company, description_text, score, level, stack, role,
+                    (title, company, description_text, score, rule_score, level, stack, role,
                      reason, status, published_at, first_seen_at, updated_at, excluded, work_format, location)
-                    VALUES (?,?,?,?,?,?,?,?,'New',?,?,?,?,?,?)""",
-                    (title, company, description_text, result.score, result.level,
+                    VALUES (?,?,?,?,?,?,?,?,?,'New',?,?,?,?,?,?)""",
+                    (title, company, description_text, result.score, result.score, result.level,
                      result.stack, result.role, result.reason, item.published_at, now, now,
                      int(excluded_role(title)), work_format, location))
                 vacancy_id = cursor.lastrowid
-                if result.score > 25 and not excluded_role(title):
+                # Queue every included vacancy so an AI adjustment can raise a
+                # low rule score above the notification threshold before mail is sent.
+                if not excluded_role(title):
                     db.execute("INSERT INTO mail_notifications(vacancy_id,queued_at) VALUES (?,?)",
                                (vacancy_id, now))
             else:
                 old = db.execute("SELECT * FROM vacancies WHERE id=?", (vacancy_id,)).fetchone()
                 effective_work_format = work_format or old["work_format"]
                 result = assess(old["title"], old["description_text"], effective_work_format)
-                db.execute("""UPDATE vacancies SET work_format=COALESCE(?,work_format),
-                           location=COALESCE(?,location), score=?, level=?, stack=?, role=?, reason=?,
-                           updated_at=? WHERE id=?""",
-                           (work_format, location, result.score, result.level, result.stack, result.role,
-                            result.reason, now, vacancy_id))
+                ai_invalid = (effective_work_format != old["work_format"] or
+                              (location is not None and location != old["location"]) or
+                              result.score != old["rule_score"])
+                if ai_invalid:
+                    db.execute("""UPDATE vacancies SET work_format=COALESCE(?,work_format),
+                               location=COALESCE(?,location), score=?, rule_score=?, level=?, stack=?,
+                               role=?, reason=?, updated_at=?, ai_score=NULL, ai_reason=NULL,
+                               ai_model=NULL, ai_analyzed_at=NULL, ai_content_hash=NULL WHERE id=?""",
+                               (work_format, location, result.score, result.score, result.level,
+                                result.stack, result.role, result.reason, now, vacancy_id))
+                else:
+                    db.execute("""UPDATE vacancies SET work_format=COALESCE(?,work_format),
+                               location=COALESCE(?,location) WHERE id=?""",
+                               (work_format, location, vacancy_id))
             cursor = db.execute("""INSERT INTO postings
                 (vacancy_id, source, source_key, original_url, canonical_url, first_seen_at,
                  last_seen_at, detail_checked_at, metadata_checked_at, detail_ok) VALUES (?,?,?,?,?,?,?,?,?,?)""",
@@ -252,6 +283,27 @@ def list_vacancies(path: Path) -> list[dict]:
         return result
 
 
+def ai_candidates(path: Path) -> list[dict]:
+    with connection(path) as db:
+        rows = db.execute("""SELECT * FROM vacancies
+            WHERE excluded=0 AND rule_score>0
+              AND status IN ('New','Interested','Applied','Viewed','Postponed')
+            ORDER BY CASE status WHEN 'New' THEN 0 WHEN 'Interested' THEN 1 WHEN 'Applied' THEN 2
+                WHEN 'Viewed' THEN 3 ELSE 4 END,
+              rule_score DESC, published_at IS NULL, published_at DESC, first_seen_at DESC, id DESC""").fetchall()
+        return [dict(row) for row in rows]
+
+
+def save_ai_assessment(path: Path, vacancy_id: int, score: int, reason: str,
+                       model: str, content_hash: str) -> None:
+    if not 0 <= score <= 100:
+        raise ValueError("AI score має бути від 0 до 100")
+    with connection(path) as db:
+        db.execute("""UPDATE vacancies SET score=?,ai_score=?,ai_reason=?,ai_model=?,
+                   ai_analyzed_at=?,ai_content_hash=? WHERE id=?""",
+                   (score, score, reason, model, utc_now(), content_hash, vacancy_id))
+
+
 def counts(path: Path) -> dict[str, int]:
     with connection(path) as db:
         rows = db.execute("SELECT status, count(*) n FROM vacancies WHERE excluded=0 GROUP BY status").fetchall()
@@ -260,12 +312,14 @@ def counts(path: Path) -> dict[str, int]:
         return result
 
 
-def pending_notifications(path: Path) -> list[dict]:
+def pending_notifications(path: Path, require_ai: bool = False) -> list[dict]:
     with connection(path) as db:
+        ai_clause = " AND v.ai_score IS NOT NULL" if require_ai else ""
         rows = db.execute("""SELECT v.id, v.title, v.score, p.original_url
             FROM mail_notifications n JOIN vacancies v ON v.id=n.vacancy_id
             JOIN postings p ON p.id=(SELECT MIN(id) FROM postings WHERE vacancy_id=v.id)
             WHERE n.sent_at IS NULL AND v.status='New' AND v.excluded=0 AND v.score>25
+            """ + ai_clause + """
             ORDER BY v.score DESC, v.published_at DESC, v.id DESC""").fetchall()
         return [dict(row) for row in rows]
 

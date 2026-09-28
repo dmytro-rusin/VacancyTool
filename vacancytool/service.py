@@ -10,6 +10,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.date import DateTrigger
 
 from . import database as db
+from .ai_scoring import analyze_pending, load_ai_settings
 from .config import TIMEZONE, load_settings, next_due, settings_path, validate_schedule
 from .notifications import send_pending
 from .sources import client, fetch_detail, fetch_feed, parse_feed
@@ -145,7 +146,14 @@ class Collector:
                     errors.append(message)
                     db.save_feed_state(self.database_path, key, None, None, message)
             try:
-                send_pending(self.root, self.database_path)
+                _, ai_errors = analyze_pending(self.root, self.database_path)
+                errors.extend(ai_errors)
+            except Exception as exc:
+                errors.append(f"AI: {exc}")
+                log.exception("AI scoring failed")
+            try:
+                send_pending(self.root, self.database_path,
+                             require_ai=load_ai_settings(self.root) is not None)
             except Exception as exc:
                 errors.append(f"Письмо: {exc}")
                 log.exception("Mail notification failed")
