@@ -60,6 +60,14 @@
         <button type="button" class="chip active" data-all="platform">Усі</button>
         {% for platform in platforms %}<button type="button" class="chip" data-platform="{{ platform }}">{{ platform }} <span>({{ platform_counts[platform] }})</span></button>{% endfor %}
       </div></div>
+      <div class="filter-row"><span class="filter-label">Дата</span><div id="date-filters" class="chips">
+        <button type="button" class="chip active" data-all="date">Усі</button>
+        <button type="button" class="chip" data-date="today">Сьогодні</button>
+        <button type="button" class="chip" data-date="3days">Останні 3 дні</button>
+        <button type="button" class="chip" data-date="week">Тиждень</button>
+        <button type="button" class="chip" data-date="month">Місяць</button>
+        <button type="button" class="chip" data-date="old">Старі</button>
+      </div></div>
     </section>
 
     <div class="list-heading"><h2>Вакансії</h2><span id="visible-count">Показано: {{ vacancies|length }}</span></div>

@@ -2,10 +2,12 @@
   const statusSelected = new Set(JSON.parse(sessionStorage.getItem('statuses') || '[]'));
   const scoreSelected = new Set(JSON.parse(sessionStorage.getItem('scores') || '[]'));
   const platformSelected = new Set(JSON.parse(sessionStorage.getItem('platforms') || '[]'));
+  const dateSelected = new Set(JSON.parse(sessionStorage.getItem('dates') || '[]'));
   const cards = [...document.querySelectorAll('.vacancy')];
   const statusButtons = [...document.querySelectorAll('[data-status]')];
   const scoreButtons = [...document.querySelectorAll('[data-score]')];
   const platformButtons = [...document.querySelectorAll('[data-platform]')];
+  const dateButtons = [...document.querySelectorAll('[data-date]')];
   const statusOrder = ['New', 'Interested', 'Applied', 'Viewed', 'Postponed', 'Rejected', 'Deleted', 'Irrelevant'];
   let nextRun = null;
   let lastRunId = null;
@@ -18,6 +20,22 @@
     if (!platformSelected.size) return true;
     const platforms = new Set((card.dataset.platforms || '').split('|').filter(Boolean));
     return [...platformSelected].some(platform => platforms.has(platform));
+  }
+  function dateMatches(card) {
+    if (!dateSelected.size) return true;
+    const published = Date.parse(card.dataset.published);
+    if (!Number.isFinite(published)) return false;
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const daysAgo = days => new Date(now.getFullYear(), now.getMonth(), now.getDate() - days).getTime();
+    return [...dateSelected].some(range => {
+      if (range === 'today') return published >= today;
+      if (range === '3days') return published >= daysAgo(2);
+      if (range === 'week') return published >= daysAgo(6);
+      if (range === 'month') return published >= daysAgo(29);
+      if (range === 'old') return published < daysAgo(29);
+      return false;
+    });
   }
   function sortCards() {
     const list = document.querySelector('#vacancies');
@@ -32,21 +50,24 @@
     let visible = 0;
     for (const card of cards) {
       const ok = (!statusSelected.size || statusSelected.has(card.dataset.status)) &&
-        scoreMatches(Number(card.dataset.score)) && platformMatches(card);
+        scoreMatches(Number(card.dataset.score)) && platformMatches(card) && dateMatches(card);
       card.hidden = !ok;
       if (ok) visible++;
     }
     statusButtons.forEach(b => b.classList.toggle('active', statusSelected.has(b.dataset.status)));
     scoreButtons.forEach(b => b.classList.toggle('active', scoreSelected.has(Number(b.dataset.score))));
     platformButtons.forEach(b => b.classList.toggle('active', platformSelected.has(b.dataset.platform)));
+    dateButtons.forEach(b => b.classList.toggle('active', dateSelected.has(b.dataset.date)));
     document.querySelector('[data-all="status"]').classList.toggle('active', !statusSelected.size);
     document.querySelector('[data-all="score"]').classList.toggle('active', !scoreSelected.size);
     document.querySelector('[data-all="platform"]').classList.toggle('active', !platformSelected.size);
+    document.querySelector('[data-all="date"]').classList.toggle('active', !dateSelected.size);
     document.querySelector('#visible-count').textContent = `Показано: ${visible}`;
     document.querySelector('#empty').hidden = visible !== 0;
     sessionStorage.setItem('statuses', JSON.stringify([...statusSelected]));
     sessionStorage.setItem('scores', JSON.stringify([...scoreSelected]));
     sessionStorage.setItem('platforms', JSON.stringify([...platformSelected]));
+    sessionStorage.setItem('dates', JSON.stringify([...dateSelected]));
   }
   document.querySelector('#status-filters').addEventListener('click', e => {
     const button = e.target.closest('button'); if (!button) return;
@@ -66,6 +87,13 @@
     if (button.dataset.all) platformSelected.clear();
     else if (platformSelected.has(button.dataset.platform)) platformSelected.delete(button.dataset.platform);
     else platformSelected.add(button.dataset.platform);
+    applyFilters();
+  });
+  document.querySelector('#date-filters').addEventListener('click', e => {
+    const button = e.target.closest('button'); if (!button) return;
+    if (button.dataset.all) dateSelected.clear();
+    else if (dateSelected.has(button.dataset.date)) dateSelected.delete(button.dataset.date);
+    else dateSelected.add(button.dataset.date);
     applyFilters();
   });
 
