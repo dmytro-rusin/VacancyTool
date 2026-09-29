@@ -286,10 +286,9 @@ def list_vacancies(path: Path) -> list[dict]:
 def ai_candidates(path: Path) -> list[dict]:
     with connection(path) as db:
         rows = db.execute("""SELECT * FROM vacancies
-            WHERE excluded=0 AND rule_score>0
-              AND status IN ('New','Interested','Applied','Viewed','Postponed')
             ORDER BY CASE status WHEN 'New' THEN 0 WHEN 'Interested' THEN 1 WHEN 'Applied' THEN 2
-                WHEN 'Viewed' THEN 3 ELSE 4 END,
+                WHEN 'Viewed' THEN 3 WHEN 'Postponed' THEN 4 WHEN 'Rejected' THEN 5
+                WHEN 'Deleted' THEN 6 ELSE 7 END,
               rule_score DESC, published_at IS NULL, published_at DESC, first_seen_at DESC, id DESC""").fetchall()
         return [dict(row) for row in rows]
 

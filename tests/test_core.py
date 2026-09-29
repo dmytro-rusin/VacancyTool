@@ -120,6 +120,24 @@ class CoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             self.assertIsNone(load_ai_settings(Path(directory)))
 
+    def test_ai_candidates_include_every_saved_vacancy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "vacancies.sqlite3"
+            initialize(database)
+            for key, title, status in (
+                ("marketing", "Mobile Marketing Specialist", "Irrelevant"),
+                ("qa", "QA iOS Engineer", "Deleted"),
+            ):
+                item = FeedItem("djinni", key, f"https://djinni.co/jobs/{key}/",
+                                f"https://djinni.co/jobs/{key}/", title, "Acme", "iOS", None)
+                self.assertTrue(upsert_item(database, item, "all", None, None, False))
+                vacancy = next(row for row in ai_candidates(database)
+                               if row["title"] == title)
+                self.assertTrue(set_status(database, vacancy["id"], status))
+            candidates = ai_candidates(database)
+            self.assertEqual({row["title"] for row in candidates},
+                             {"Mobile Marketing Specialist", "QA iOS Engineer"})
+
     def test_ai_configuration_rejects_remote_servers(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

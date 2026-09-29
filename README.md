@@ -86,7 +86,7 @@ AI scoring is optional and disabled until `ai.json` is created. Install Ollama, 
 
 The default configuration uses `qwen3.5:9b` through `http://127.0.0.1:11434`. VacancyTool rejects non-local Ollama addresses. The model receives the candidate profile, the vacancy text, and the deterministic base score. It can adjust the base score only from `-20` to `+10`; strong priority matches starting at `85` can lose at most `5` points. Every result is validated against a JSON schema.
 
-Unchanged vacancies are not analyzed again. Vacancies with a zero rule score and inactive workflow statuses are skipped to avoid wasting local compute. A change to the vacancy, profile, model, or prompt invalidates the saved AI result. The model is unloaded after each scoring batch to return memory to other applications.
+Every saved vacancy is eligible for AI analysis. Unchanged vacancies are not analyzed again. A change to the vacancy, profile, model, or prompt invalidates the saved AI result. The model is unloaded after each scoring batch to return memory to other applications.
 
 ### Email notifications
 
