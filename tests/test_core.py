@@ -383,14 +383,15 @@ class CoreTests(unittest.TestCase):
                 upsert_item(database, item, "ios", None, None, False)
             with closing(connect(database)) as db:
                 ids = {row["title"]: row["id"] for row in db.execute("SELECT id,title FROM vacancies")}
-            set_status(database, ids["Junior Python Backend Engineer"], "Interested")
-            for title in ("Senior iOS Developer", "Senior iOS Engineer", "Senior iOS Programmer"):
+            set_status(database, ids["Junior Python Backend Engineer"], "Offer")
+            set_status(database, ids["Senior iOS Developer"], "Communication")
+            for title in ("Senior iOS Engineer", "Senior iOS Programmer"):
                 set_status(database, ids[title], "Applied")
             self.assertEqual([row["title"] for row in list_vacancies(database)], [
                 "Junior Python Backend Engineer",
+                "Senior iOS Developer",
                 "Senior iOS Programmer",
                 "Senior iOS Engineer",
-                "Senior iOS Developer",
             ])
 
 

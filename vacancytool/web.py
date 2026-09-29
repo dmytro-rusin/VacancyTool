@@ -11,11 +11,13 @@ from .service import Collector
 
 
 STATUS_FILTER_LABELS = {
+    "Offer": "Пропозиція", "Communication": "Комунікація",
     "New": "Нові", "Interested": "Цікавлять", "Applied": "Відгук надіслано",
     "Viewed": "Переглянуті", "Postponed": "Відкладені", "Rejected": "Відмова",
     "Deleted": "Видалені", "Irrelevant": "Нерелевантні",
 }
 STATUS_OPTION_LABELS = {
+    "Offer": "Пропозиція", "Communication": "Комунікація",
     "New": "Нова", "Interested": "Цікавить", "Applied": "Відгук надіслано",
     "Viewed": "Переглянута", "Postponed": "Відкладена", "Rejected": "Відмова",
     "Deleted": "Видалена", "Irrelevant": "Нерелевантна",

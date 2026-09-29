@@ -5,6 +5,8 @@
 .ai-summary strong{display:inline-block;margin-right:5px;color:#2f7353;font-size:10px;letter-spacing:.06em}
 
 /* A quiet status tint keeps long lists scannable without competing with the score. */
+.vacancy[data-status="Offer"]{background:#f7fbf2;border-color:#d8e7ca}
+.vacancy[data-status="Communication"]{background:#f7f9fd;border-color:#dce3ef}
 .vacancy[data-status="New"]{background:#f7fbff;border-color:#dce8f2}
 .vacancy[data-status="Applied"]{background:#f6fbf7;border-color:#dbe9de}
 .vacancy[data-status="Interested"]{background:#fffaf2;border-color:#eee4d2}

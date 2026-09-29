@@ -11,7 +11,7 @@ The application is designed to run continuously on a personal computer. It polls
 - Cross-source normalization and conservative deduplication
 - Deterministic scoring from `0` to `100`, optionally refined by a fully local Ollama model
 - Automatic exclusion of QA, Project Manager, UI/UX Designer, and Customer Support roles
-- Persistent workflow statuses: `New`, `Interested`, `Applied`, `Viewed`, `Postponed`, `Rejected`, `Deleted`, and `Irrelevant`
+- Persistent workflow statuses: `Offer`, `Communication`, `New`, `Interested`, `Applied`, `Viewed`, `Postponed`, `Rejected`, `Deleted`, and `Irrelevant`
 - Combined status, score, platform, and publication-date filters with immediate status updates
 - Dynamic polling intervals based on the time of day
 - Email digests for new vacancies scoring above `25`
@@ -138,7 +138,7 @@ When local AI scoring is enabled, the dashboard displays the adjusted score with
 
 Vacancies are ordered by:
 
-1. Status: `New → Interested → Applied → Viewed → Postponed → Rejected → Deleted → Irrelevant`
+1. Status: `Offer → Communication → New → Interested → Applied → Viewed → Postponed → Rejected → Deleted → Irrelevant`
 2. Score, highest first
 3. Publication date, newest first
 

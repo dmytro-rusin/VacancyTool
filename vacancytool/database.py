@@ -10,7 +10,8 @@ from pathlib import Path
 from .scoring import assess, detect_platforms
 from .sources import FeedItem, dou_company, html_to_text, without_salary, without_salary_title
 
-STATUSES = ("New", "Applied", "Interested", "Viewed", "Postponed", "Rejected", "Irrelevant", "Deleted")
+STATUSES = ("Offer", "Communication", "New", "Interested", "Applied", "Viewed",
+            "Postponed", "Rejected", "Deleted", "Irrelevant")
 
 
 def excluded_role(title: str) -> bool:
@@ -272,9 +273,10 @@ def list_vacancies(path: Path) -> list[dict]:
             (SELECT group_concat(DISTINCT source) FROM postings WHERE vacancy_id=v.id) AS sources
             FROM vacancies v JOIN postings p ON p.id=(SELECT MIN(id) FROM postings WHERE vacancy_id=v.id)
             WHERE v.excluded=0
-            ORDER BY CASE v.status WHEN 'New' THEN 0 WHEN 'Interested' THEN 1 WHEN 'Applied' THEN 2
-                WHEN 'Viewed' THEN 3 WHEN 'Postponed' THEN 4 WHEN 'Rejected' THEN 5
-                WHEN 'Deleted' THEN 6 WHEN 'Irrelevant' THEN 7 ELSE 8 END,
+            ORDER BY CASE v.status WHEN 'Offer' THEN 0 WHEN 'Communication' THEN 1
+                WHEN 'New' THEN 2 WHEN 'Interested' THEN 3 WHEN 'Applied' THEN 4
+                WHEN 'Viewed' THEN 5 WHEN 'Postponed' THEN 6 WHEN 'Rejected' THEN 7
+                WHEN 'Deleted' THEN 8 WHEN 'Irrelevant' THEN 9 ELSE 10 END,
               v.score DESC,
               v.published_at IS NULL, v.published_at DESC, v.first_seen_at DESC, v.id DESC""").fetchall()
         result = [dict(row) for row in rows]
@@ -286,9 +288,10 @@ def list_vacancies(path: Path) -> list[dict]:
 def ai_candidates(path: Path) -> list[dict]:
     with connection(path) as db:
         rows = db.execute("""SELECT * FROM vacancies
-            ORDER BY CASE status WHEN 'New' THEN 0 WHEN 'Interested' THEN 1 WHEN 'Applied' THEN 2
-                WHEN 'Viewed' THEN 3 WHEN 'Postponed' THEN 4 WHEN 'Rejected' THEN 5
-                WHEN 'Deleted' THEN 6 ELSE 7 END,
+            ORDER BY CASE status WHEN 'Offer' THEN 0 WHEN 'Communication' THEN 1
+                WHEN 'New' THEN 2 WHEN 'Interested' THEN 3 WHEN 'Applied' THEN 4
+                WHEN 'Viewed' THEN 5 WHEN 'Postponed' THEN 6 WHEN 'Rejected' THEN 7
+                WHEN 'Deleted' THEN 8 ELSE 9 END,
               rule_score DESC, published_at IS NULL, published_at DESC, first_seen_at DESC, id DESC""").fetchall()
         return [dict(row) for row in rows]
 

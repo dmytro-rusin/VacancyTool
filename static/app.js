@@ -8,7 +8,7 @@
   const scoreButtons = [...document.querySelectorAll('[data-score]')];
   const platformButtons = [...document.querySelectorAll('[data-platform]')];
   const dateButtons = [...document.querySelectorAll('[data-date]')];
-  const statusOrder = ['New', 'Interested', 'Applied', 'Viewed', 'Postponed', 'Rejected', 'Deleted', 'Irrelevant'];
+  const statusOrder = ['Offer', 'Communication', 'New', 'Interested', 'Applied', 'Viewed', 'Postponed', 'Rejected', 'Deleted', 'Irrelevant'];
   let nextRun = null;
   let lastRunId = null;
 
